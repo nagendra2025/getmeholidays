@@ -8,6 +8,7 @@ import java.time.format.TextStyle;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class HolidayService {
                                         Integer day,
                                         String type) {
 
+    	country = country.toUpperCase(Locale.ENGLISH);
         // validate normal mode (no topn here)
         validateRequest(country, year, month, day);
 
@@ -64,6 +66,7 @@ public class HolidayService {
                                                         Integer day,
                                                         String type) {
 
+    	country = country.toUpperCase(Locale.ENGLISH);
         // Basic validation reused for country + year
         validateRequest(country, year, null, null);
 
@@ -102,11 +105,8 @@ public class HolidayService {
         List<Holiday> allHolidays = response.getResponse().getHolidays();
 
         return allHolidays.stream()
-                // keep only National holidays
-                .filter(h -> h.getType() != null &&
-                        h.getType().stream()
-                                .anyMatch(t -> t != null &&
-                                        t.toLowerCase(Locale.ENGLISH).contains("national holiday")))
+                // keep only National holidays – using multiple fields
+                .filter(this::isNationalHoliday)
                 .map(this::toNationalDto)
                 .collect(Collectors.toList());
     }
@@ -155,6 +155,44 @@ public class HolidayService {
         } else if (day != null) {
             throw new InvalidRequestException("Day cannot be provided without month.");
         }
+    }
+
+    // ─────────────────────────────────────────────
+    //  Helper: Determine if a holiday is “National holiday”
+    //  Checks type, primaryType, description, and name (case-insensitive)
+    // ─────────────────────────────────────────────
+    private boolean isNationalHoliday(Holiday h) {
+        if (h == null) return false;
+
+        String needle = "national holiday";
+
+        // 1) type list
+        if (h.getType() != null) {
+            boolean inType = h.getType().stream()
+                    .filter(Objects::nonNull)
+                    .anyMatch(t -> t.toLowerCase(Locale.ENGLISH).contains(needle));
+            if (inType) return true;
+        }
+
+        // 2) primaryType (new field)
+        if (h.getPrimaryType() != null &&
+                h.getPrimaryType().toLowerCase(Locale.ENGLISH).contains(needle)) {
+            return true;
+        }
+
+        // 3) description
+        if (h.getDescription() != null &&
+                h.getDescription().toLowerCase(Locale.ENGLISH).contains(needle)) {
+            return true;
+        }
+
+        // 4) name (optional, last resort)
+        if (h.getName() != null &&
+                h.getName().toLowerCase(Locale.ENGLISH).contains(needle)) {
+            return true;
+        }
+
+        return false;
     }
 
     // ─────────────────────────────────────────────
